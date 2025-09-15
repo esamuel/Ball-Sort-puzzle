@@ -14,7 +14,24 @@ enum GameType {
   presetEasy,
   presetMedium,
   presetHard,
+  rainbow,
+  checkerboard,
+  spiral,
 }
+
+// Game type display names and descriptions
+Map<GameType, Map<String, String>> gameTypeInfo = {
+  GameType.shuffle: {'name': 'Random Shuffle', 'description': 'Classic random distribution'},
+  GameType.stripesWithSorted: {'name': 'Stripes + Sorted', 'description': 'Horizontal stripes with 2 sorted tubes'},
+  GameType.twoColorStripes: {'name': 'Two-Color Stripes', 'description': 'Alternating two colors in stripes'},
+  GameType.gradientWaves: {'name': 'Gradient Waves', 'description': 'Color gradient wave pattern'},
+  GameType.rainbow: {'name': 'Rainbow Pattern', 'description': 'Colors arranged in rainbow sequence'},
+  GameType.checkerboard: {'name': 'Checkerboard', 'description': 'Alternating color checkerboard pattern'},
+  GameType.spiral: {'name': 'Spiral Pattern', 'description': 'Colors arranged in spiral formation'},
+  GameType.presetEasy: {'name': 'Preset Easy', 'description': 'Nearly solved puzzle'},
+  GameType.presetMedium: {'name': 'Preset Medium', 'description': 'Moderately mixed puzzle'},
+  GameType.presetHard: {'name': 'Preset Hard', 'description': 'Heavily mixed puzzle'},
+};
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -28,6 +45,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   final int ballsPerColor = 12; // tube capacity
   final int emptyTubes = 2; // exactly two empty tubes for playability
   static const int totalTubes = 15;
+  
+  // Calculate number of colors based on game tubes (not including empty tubes)
+  int get numberOfColors => totalTubes - emptyTubes; // 13 colors for game tubes
   final List<String> colors = [
     "red",
     "blue",
@@ -46,7 +66,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     "black"
   ];
 
-  // Current game type
+  // Current game type - start with recommended shuffle mode
   GameType _gameType = GameType.shuffle;
 
   List<Tube> tubes = [];
@@ -103,7 +123,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     if (_gameType == GameType.shuffle) {
       // Shuffle mode: distribute randomly across filled tubes
-      final int filledTubeCount = totalTubes - emptyTubes; // 13
+      final int filledTubeCount = numberOfColors; // Use numberOfColors instead of totalTubes - emptyTubes
       final List<String> chosenColors = List<String>.from(colors)..shuffle(rng);
       final usedColors = chosenColors.take(filledTubeCount).toList();
 
@@ -206,9 +226,86 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ];
       final Tube emptyTube = Tube([], capacity: ballsPerColor);
       tubes = [...stripeTubes, ...sortedTubes, emptyTube];
+    } else if (_gameType == GameType.rainbow) {
+      // Rainbow pattern: colors arranged in rainbow sequence across tubes
+      final int filledTubeCount = numberOfColors;
+      final List<String> rainbowColors = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink', 'brown', 'lime', 'navy', 'teal', 'silver'];
+      List<String> bag = [];
+      for (int i = 0; i < filledTubeCount; i++) {
+        final String color = rainbowColors[i % rainbowColors.length];
+        bag.addAll(List.filled(ballsPerColor, color));
+      }
+      bag.shuffle(rng);
+      
+      List<Tube> filled = List.generate(filledTubeCount, (_) => Tube([], capacity: ballsPerColor));
+      int idx = 0;
+      for (final b in bag) {
+        while (filled[idx].isFull) {
+          idx = (idx + 1) % filled.length;
+        }
+        filled[idx].balls.add(b);
+        idx = (idx + 1) % filled.length;
+      }
+      final empties = List.generate(emptyTubes, (_) => Tube([], capacity: ballsPerColor));
+      tubes = [...filled, ...empties];
+    } else if (_gameType == GameType.checkerboard) {
+      // Checkerboard pattern: alternating colors in a checkerboard pattern
+      final int filledTubeCount = numberOfColors;
+      final List<String> shuffled = List<String>.from(colors)..shuffle(rng);
+      final usedColors = shuffled.take(filledTubeCount).toList();
+      
+      List<String> bag = [];
+      for (int tubeIdx = 0; tubeIdx < filledTubeCount; tubeIdx++) {
+        for (int ballIdx = 0; ballIdx < ballsPerColor; ballIdx++) {
+          // Checkerboard pattern based on tube and ball position
+          final int colorIdx = ((tubeIdx + ballIdx) % 2 == 0) ? 0 : 1;
+          final String color = usedColors[colorIdx % usedColors.length];
+          bag.add(color);
+        }
+      }
+      bag.shuffle(rng);
+      
+      List<Tube> filled = List.generate(filledTubeCount, (_) => Tube([], capacity: ballsPerColor));
+      int idx = 0;
+      for (final b in bag) {
+        while (filled[idx].isFull) {
+          idx = (idx + 1) % filled.length;
+        }
+        filled[idx].balls.add(b);
+        idx = (idx + 1) % filled.length;
+      }
+      final empties = List.generate(emptyTubes, (_) => Tube([], capacity: ballsPerColor));
+      tubes = [...filled, ...empties];
+    } else if (_gameType == GameType.spiral) {
+      // Spiral pattern: colors arranged in spiral formation
+      final int filledTubeCount = numberOfColors;
+      final List<String> shuffled = List<String>.from(colors)..shuffle(rng);
+      final usedColors = shuffled.take(filledTubeCount).toList();
+      
+      List<String> bag = [];
+      for (int i = 0; i < filledTubeCount; i++) {
+        for (int j = 0; j < ballsPerColor; j++) {
+          // Spiral pattern: color changes based on position in spiral
+          final int spiralPos = (i * ballsPerColor + j) % usedColors.length;
+          bag.add(usedColors[spiralPos]);
+        }
+      }
+      bag.shuffle(rng);
+      
+      List<Tube> filled = List.generate(filledTubeCount, (_) => Tube([], capacity: ballsPerColor));
+      int idx = 0;
+      for (final b in bag) {
+        while (filled[idx].isFull) {
+          idx = (idx + 1) % filled.length;
+        }
+        filled[idx].balls.add(b);
+        idx = (idx + 1) % filled.length;
+      }
+      final empties = List.generate(emptyTubes, (_) => Tube([], capacity: ballsPerColor));
+      tubes = [...filled, ...empties];
     } else {
       // Preset challenges – build near-solved then mix with limited rotations
-      final int filledTubeCount = totalTubes - emptyTubes; // 13 filled + 2 empties
+      final int filledTubeCount = numberOfColors; // Use numberOfColors for consistency
       final List<String> chosenColors = List<String>.from(colors)..shuffle(rng);
       final usedColors = chosenColors.take(filledTubeCount).toList();
       List<Tube> filled = usedColors
@@ -386,7 +483,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("🎉 You Won!"),
-        content: Text("All tubes are sorted!\nTime: ${_formatTime(_elapsed)}\nMoves: $moves\nScore: $_score"),
+        content: Text("All tubes are sorted!\nTime: ${_formatTime(_elapsed)}\nMoves: $moves"),
         actions: [
           TextButton(
             child: const Text("Play Again"),
@@ -429,17 +526,51 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 // Preset button with difficulty picker
                 ElevatedButton.icon(
                   icon: const Icon(Icons.flag),
-                  label: const Text('Preset', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  label: const Text('Recommended', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade100,
+                    foregroundColor: Colors.green.shade800,
+                  ),
                   onPressed: () async {
                     final GameType? sel = await showMenu<GameType>(
                       context: context,
                       color: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       position: const RelativeRect.fromLTRB(200, 120, 0, 0),
-                      items: const [
-                        PopupMenuItem(value: GameType.presetEasy, child: Text('Preset – Easy')),
-                        PopupMenuItem(value: GameType.presetMedium, child: Text('Preset – Medium')),
-                        PopupMenuItem(value: GameType.presetHard, child: Text('Preset – Hard')),
+                      items: [
+                        PopupMenuItem(
+                          value: GameType.shuffle,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('Random Shuffle', style: TextStyle(fontWeight: FontWeight.w700)),
+                              Text('Best for beginners', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: GameType.rainbow,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('Rainbow Pattern', style: TextStyle(fontWeight: FontWeight.w700)),
+                              Text('Colorful and fun', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: GameType.presetMedium,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('Preset Medium', style: TextStyle(fontWeight: FontWeight.w700)),
+                              Text('Balanced challenge', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                            ],
+                          ),
+                        ),
                       ],
                     );
                     if (sel != null) {
@@ -452,41 +583,62 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   },
                 ),
                 // const SizedBox(width: 12),
-                // Visible game type selector
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 6,
-                  children: [
-                    const Text('Game Type: ', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w700, fontSize: 16)),
-                    DropdownButton<GameType>(
-                      value: _gameType,
-                      dropdownColor: Colors.white,
-                      style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w700, fontSize: 16),
-                      iconEnabledColor: Colors.black87,
-                      underline: const SizedBox.shrink(),
-                      items: const [
-                        DropdownMenuItem(value: GameType.shuffle, child: Text('Shuffle', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-                        DropdownMenuItem(value: GameType.stripesWithSorted, child: Text('Stripes + 3 sorted', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-                        DropdownMenuItem(value: GameType.twoColorStripes, child: Text('Two-color stripes', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-                        DropdownMenuItem(value: GameType.gradientWaves, child: Text('Gradient waves', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-                      ],
-                      onChanged: (type) {
-                        if (type == null) return;
-                        setState(() {
-                          _gameType = type;
-                          seed = DateTime.now().millisecondsSinceEpoch;
-                          _initGame(seed: seed);
-                        });
-                      },
-                    ),
-                  ],
+                // Enhanced game type selector with better UI
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.games, color: Colors.blue, size: 20),
+                      const SizedBox(width: 8),
+                      const Text('Mode: ', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 14)),
+                      DropdownButton<GameType>(
+                        value: _gameType,
+                        dropdownColor: Colors.white,
+                        style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 14),
+                        iconEnabledColor: Colors.blue,
+                        underline: const SizedBox.shrink(),
+                        items: GameType.values.map((type) {
+                          final info = gameTypeInfo[type]!;
+                          return DropdownMenuItem(
+                            value: type,
+                            child: Tooltip(
+                              message: info['description']!,
+                              child: Text(
+                                info['name']!,
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (type) {
+                          if (type == null) return;
+                          setState(() {
+                            _gameType = type;
+                            seed = DateTime.now().millisecondsSinceEpoch;
+                            _initGame(seed: seed);
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                 ),
                 // const SizedBox(width: 12),
                 Text('Time: ' + _formatTime(_elapsed), style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w700, fontSize: 16)),
                 // const SizedBox(width: 12),
                 Text('Moves: ' + moves.toString(), style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w700, fontSize: 16)),
-                // const SizedBox(width: 12),
-                Text('Score: ' + _score.toString(), style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w700, fontSize: 16)),
               ],
             ),
           ),
@@ -514,7 +666,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           ),
           PopupMenuButton<GameType>(
             icon: const Icon(Icons.tune),
-            tooltip: 'Game Type',
+            tooltip: 'Game Modes',
             color: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             onSelected: (type) {
@@ -524,12 +676,30 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 _initGame(seed: seed);
               });
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: GameType.shuffle, child: Text('Shuffle', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-              PopupMenuItem(value: GameType.stripesWithSorted, child: Text('Stripes + 3 sorted', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-              PopupMenuItem(value: GameType.twoColorStripes, child: Text('Two-color stripes', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-              PopupMenuItem(value: GameType.gradientWaves, child: Text('Gradient waves', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-            ],
+            itemBuilder: (_) => GameType.values.map((type) {
+              final info = gameTypeInfo[type]!;
+              return PopupMenuItem(
+                value: type,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      info['name']!,
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                    Text(
+                      info['description']!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
           ),
         ],
       ),
@@ -749,7 +919,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             final t = curve.value;
             final double dx = (path.end.dx - path.start.dx).abs();
             final double dy = (path.end.dy - path.start.dy).abs();
-            final double lift = (path.tileH * 0.22) + 0.08 * dx + 0.04 * dy;
+            final double lift = (path.tileH * 0.15) + 0.04 * dx + 0.02 * dy; // Reduced bounce height
             final Offset ctrl = Offset(
               (path.start.dx + path.end.dx) / 2,
               min(path.start.dy, path.end.dy) - lift,
