@@ -336,7 +336,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           final t = filled[i];
           final int k = min(take, t.balls.length);
           tops.add(t.balls.sublist(t.balls.length - k));
-          t.balls.removeRange(t.balls.length - k, t.balls.length);
+          // Use removeLast instead of removeRange to avoid fixed-length list issues
+          for (int j = 0; j < k; j++) {
+            if (t.balls.isNotEmpty) t.balls.removeLast();
+          }
         }
         // place into next tube
         for (int i = 0; i < ring; i++) {
@@ -861,6 +864,25 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
+  Offset _quadraticBezierClamped(Offset p0, Offset p1, Offset p2, double t) {
+    final double u = 1 - t;
+    final Offset result = Offset(
+      u * u * p0.dx + 2 * u * t * p1.dx + t * t * p2.dx,
+      u * u * p0.dy + 2 * u * t * p1.dy + t * t * p2.dy,
+    );
+    
+    // Ensure the ball doesn't go below the destination point when t is close to 1
+    if (t > 0.9) {
+      final double lerpFactor = (t - 0.9) / 0.1; // 0 to 1 over the last 10% of animation
+      return Offset(
+        result.dx,
+        result.dy + (p2.dy - result.dy) * lerpFactor, // Gradually move to exact destination Y
+      );
+    }
+    
+    return result;
+  }
+
   // --- Precomputed flight path variant ---
   _FlightPath _computeFlightPath({
     required int from,
@@ -890,8 +912,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final double srcCenterY = verticalPadding + tubeBorderWidth + srcPlaceholders * slot + slot / 2;
 
     final int dstCount = tubes[to].balls.length;
-    // incoming ball occupies the last placeholder
+    // Calculate the correct position for the incoming ball (it will be at position dstCount)
     final int dstPlaceholdersAfter = (ballsPerColor - (dstCount + 1)).clamp(0, ballsPerColor);
+    // Position the ball at the correct slot from the bottom, accounting for existing balls
     final double dstCenterY = verticalPadding + tubeBorderWidth + dstPlaceholdersAfter * slot + slot / 2;
 
     final Offset start = fromTopLeft + Offset(tileW / 2, srcCenterY);
@@ -919,12 +942,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             final t = curve.value;
             final double dx = (path.end.dx - path.start.dx).abs();
             final double dy = (path.end.dy - path.start.dy).abs();
-            final double lift = (path.tileH * 0.15) + 0.04 * dx + 0.02 * dy; // Reduced bounce height
+            final double lift = (path.tileH * 0.12) + 0.03 * dx + 0.01 * dy; // Further reduced bounce height
             final Offset ctrl = Offset(
               (path.start.dx + path.end.dx) / 2,
               min(path.start.dy, path.end.dy) - lift,
             );
-            final Offset pos = _quadraticBezier(path.start, ctrl, path.end, t);
+            // Use a modified curve that ensures the ball lands exactly at the destination
+            final Offset pos = _quadraticBezierClamped(path.start, ctrl, path.end, t);
             final double scale = 0.94 + 0.08 * (1 - (2 * (t - 0.5)).abs());
             return Positioned(
               left: pos.dx - (path.slot * 0.5),
