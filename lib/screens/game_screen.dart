@@ -814,35 +814,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     // Only move if the dragged ball is actually on top
                     if (tubes[from].balls.last != ball) return;
 
-                    // Commit-on-landing approach to avoid duplicates:
-                    // If destination can accept, remove from source, animate to destination, then add on landing.
-                    if (!tubes[to].canAccept(ball)) return;
-
-                    // Precompute flight path using current positions (destination not yet modified)
-                    final _FlightPath path = _computeFlightPath(
-                      from: from,
-                      to: to,
-                      color: ball,
-                      tileW: tileWForFlight,
-                      tileH: tileHForFlight,
-                    );
-
-                    // Remove from source immediately; destination will be updated on landing
-                    tubes[from].balls.removeLast();
-                    setState(() {
-                      _animatingToIndex = to;
-                      _animatingColor = ball;
-                    });
-
-                    _startBallFlightWithPositions(
-                      path,
-                      onComplete: () {
-                        // Add to destination on landing, then clear flags and check win
-                        tubes[to].balls.add(ball);
-                        setState(() {});
-                        if (_checkWin()) _showWinPopup();
-                      },
-                    );
+                    // Use same logic as tap - no animation, direct move
+                    if (_moveBall(from, to)) {
+                      setState(() {});
+                      if (_checkWin()) _showWinPopup();
+                    }
                   },
                 ),
               );
@@ -905,11 +881,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final double srcCenterY = verticalPadding + tubeBorderWidth + srcPlaceholders * slot + slot / 2;
 
     final int dstCount = tubes[to].balls.length;
-    // The incoming ball will be placed at the top of existing balls
-    // Calculate position from top: placeholders + existing balls + new ball position
-    final int dstPlaceholdersAfter = (ballsPerColor - (dstCount + 1)).clamp(0, ballsPerColor);
-    // Position from top: border + placeholders + half slot for center of new ball position
-    final double dstCenterY = verticalPadding + tubeBorderWidth + (dstPlaceholdersAfter * slot) + (dstCount * slot) + slot / 2;
+    // Calculate where the new ball will be positioned in the tube
+    // Balls are stacked from bottom up, so new ball goes on top of existing balls
+    final int emptySlots = ballsPerColor - dstCount; // empty slots above existing balls
+    final int newBallSlotFromTop = emptySlots - 1; // new ball takes the lowest empty slot
+    // Position from tube top: border + (slot index * slot height) + half slot for center
+    final double dstCenterY = verticalPadding + tubeBorderWidth + (newBallSlotFromTop * slot) + slot / 2;
 
     final Offset start = fromTopLeft + Offset(tileW / 2, srcCenterY);
     final Offset end = toTopLeft + Offset(tileW / 2, dstCenterY);
@@ -934,18 +911,26 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           animation: curve,
           builder: (context, child) {
             final t = curve.value;
-            final double dx = (path.end.dx - path.start.dx).abs();
-            // Reduce lift significantly and ensure control point doesn't create overshoot
-            final double lift = (path.tileH * 0.08) + 0.02 * dx; // Much smaller lift
-            final double controlY = min(path.start.dy, path.end.dy) - lift;
-            // Ensure control point Y is never below destination Y to prevent overshoot
-            final double safeControlY = controlY.clamp(double.negativeInfinity, path.end.dy - 10);
-            final Offset ctrl = Offset(
-              (path.start.dx + path.end.dx) / 2,
-              safeControlY,
-            );
-            // Use a modified curve that ensures the ball lands exactly at the destination
-            final Offset pos = _quadraticBezierClamped(path.start, ctrl, path.end, t);
+            // Constrained arc that stays within tube boundaries
+            final double x = path.start.dx + (path.end.dx - path.start.dx) * t;
+            
+            // Create a gentle arc that peaks at 1/4 of the journey and never goes below destination
+            double y;
+            if (t <= 0.25) {
+              // First quarter: slight upward arc
+              final double arcT = t / 0.25; // 0 to 1 for first quarter
+              final double peakY = path.start.dy - 15; // Small 15px peak above start
+              y = path.start.dy + (peakY - path.start.dy) * arcT;
+            } else {
+              // Remaining 3/4: smooth descent to destination
+              final double arcT = (t - 0.25) / 0.75; // 0 to 1 for remaining journey
+              final double peakY = path.start.dy - 15;
+              y = peakY + (path.end.dy - peakY) * arcT;
+            }
+            
+            // Ensure Y never goes below destination
+            y = y.clamp(double.negativeInfinity, path.end.dy);
+            final Offset pos = Offset(x, y);
             final double scale = 0.94 + 0.08 * (1 - (2 * (t - 0.5)).abs());
             return Positioned(
               left: pos.dx - (path.slot * 0.5),
