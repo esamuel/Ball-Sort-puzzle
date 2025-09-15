@@ -869,16 +869,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       u * u * p0.dy + 2 * u * t * p1.dy + t * t * p2.dy,
     );
     
-    // Ensure the ball doesn't go below the destination point when t is close to 1
-    if (t > 0.9) {
-      final double lerpFactor = (t - 0.9) / 0.1; // 0 to 1 over the last 10% of animation
-      return Offset(
-        result.dx,
-        result.dy + (p2.dy - result.dy) * lerpFactor, // Gradually move to exact destination Y
-      );
-    }
+    // Constrain Y position to never go below the destination point
+    final double maxY = p2.dy;
+    final double clampedY = result.dy.clamp(double.negativeInfinity, maxY);
     
-    return result;
+    return Offset(result.dx, clampedY);
   }
 
   // --- Precomputed flight path variant ---
@@ -940,11 +935,14 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           builder: (context, child) {
             final t = curve.value;
             final double dx = (path.end.dx - path.start.dx).abs();
-            final double dy = (path.end.dy - path.start.dy).abs();
-            final double lift = (path.tileH * 0.12) + 0.03 * dx + 0.01 * dy; // Further reduced bounce height
+            // Reduce lift significantly and ensure control point doesn't create overshoot
+            final double lift = (path.tileH * 0.08) + 0.02 * dx; // Much smaller lift
+            final double controlY = min(path.start.dy, path.end.dy) - lift;
+            // Ensure control point Y is never below destination Y to prevent overshoot
+            final double safeControlY = controlY.clamp(double.negativeInfinity, path.end.dy - 10);
             final Offset ctrl = Offset(
               (path.start.dx + path.end.dx) / 2,
-              min(path.start.dy, path.end.dy) - lift,
+              safeControlY,
             );
             // Use a modified curve that ensures the ball lands exactly at the destination
             final Offset pos = _quadraticBezierClamped(path.start, ctrl, path.end, t);
