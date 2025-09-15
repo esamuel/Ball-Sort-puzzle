@@ -928,8 +928,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _flightEntry?.remove();
     _flightEntry = null;
     _flightCtrl?.dispose();
-    _flightCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
-    final CurvedAnimation curve = CurvedAnimation(parent: _flightCtrl!, curve: Curves.easeInOutCubicEmphasized);
+    _flightCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    final CurvedAnimation curve = CurvedAnimation(parent: _flightCtrl!, curve: Curves.easeInOutCubic);
 
     final OverlayState? overlay = Overlay.of(context);
     _flightEntry?.remove();
