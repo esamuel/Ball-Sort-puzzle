@@ -336,10 +336,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           final t = filled[i];
           final int k = min(take, t.balls.length);
           tops.add(t.balls.sublist(t.balls.length - k));
-          // Use removeLast instead of removeRange to avoid fixed-length list issues
-          for (int j = 0; j < k; j++) {
-            if (t.balls.isNotEmpty) t.balls.removeLast();
-          }
+          // Create a new list without the last k elements to avoid fixed-length list issues
+          t.balls = t.balls.sublist(0, t.balls.length - k);
         }
         // place into next tube
         for (int i = 0; i < ring; i++) {
@@ -912,10 +910,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final double srcCenterY = verticalPadding + tubeBorderWidth + srcPlaceholders * slot + slot / 2;
 
     final int dstCount = tubes[to].balls.length;
-    // Calculate the correct position for the incoming ball (it will be at position dstCount)
+    // The incoming ball will be placed at the top of existing balls
+    // Calculate position from top: placeholders + existing balls + new ball position
     final int dstPlaceholdersAfter = (ballsPerColor - (dstCount + 1)).clamp(0, ballsPerColor);
-    // Position the ball at the correct slot from the bottom, accounting for existing balls
-    final double dstCenterY = verticalPadding + tubeBorderWidth + dstPlaceholdersAfter * slot + slot / 2;
+    // Position from top: border + placeholders + half slot for center of new ball position
+    final double dstCenterY = verticalPadding + tubeBorderWidth + (dstPlaceholdersAfter * slot) + (dstCount * slot) + slot / 2;
 
     final Offset start = fromTopLeft + Offset(tileW / 2, srcCenterY);
     final Offset end = toTopLeft + Offset(tileW / 2, dstCenterY);
