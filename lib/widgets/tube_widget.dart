@@ -6,9 +6,11 @@ class TubeWidget extends StatelessWidget {
   final bool highlight;
   final int capacity;
   final int? tubeIndex; // used for drag data
-  final void Function(int from, int to, String ball)? onDrop;
   final bool hintAccept;
   final VoidCallback? onTap;
+  final Function(int from, int to, String ball)? onDrop;
+  // Optional: parent-provided predicate to decide if a ball can be dropped here
+  final bool Function(String ball, Tube dest)? canDropPredicate;
   // When set, hides the topmost ball if it matches this color (used to avoid duplicate with ghost animation)
   final String? suppressTopForColor;
 
@@ -18,9 +20,10 @@ class TubeWidget extends StatelessWidget {
     this.highlight = false,
     this.capacity = 12,
     this.tubeIndex,
-    this.onDrop,
     this.hintAccept = false,
     this.onTap,
+    this.onDrop,
+    this.canDropPredicate,
     this.suppressTopForColor,
   });
 
@@ -30,36 +33,43 @@ class TubeWidget extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         const double verticalPadding = 0; // exact fit to height when full
-        const double horizontalPadding = 2;
-        const double tubeBorderWidth = 1.5;
+        const double horizontalPadding = 1;
+        const double tubeBorderWidth = 2.0;
         const double itemSpacing = 0; // no spacing so balls fill height per slot
 
         final double usableHeight = constraints.maxHeight - (verticalPadding * 2) - (tubeBorderWidth * 2);
         final double usableWidth = constraints.maxWidth - (horizontalPadding * 2) - (tubeBorderWidth * 2);
         final int count = tube.balls.length.clamp(0, capacity);
-        // Orientation (used only for cosmetic bottom spacing inside each tile)
-        final media = MediaQuery.of(context);
-        final bool isLandscape = media.orientation == Orientation.landscape;
         // Display from top to bottom: reverse so the visual top corresponds to tube.balls.last
         final List<String> displayBalls = List<String>.from(tube.balls.reversed);
 
-        // Exact per-slot height (portrait behavior): bottom ball touches lower edge, no margin.
+        // Exact per-slot height with floor to avoid cumulative rounding overflow
         final double perSlot = usableHeight / capacity;
-        double computedBallSize = perSlot;
+        double computedBallSize = perSlot.floorToDouble();
         if (computedBallSize > usableWidth) computedBallSize = usableWidth; // guard by inner width
-        computedBallSize = computedBallSize.clamp(8.0, 60.0);
+        computedBallSize = computedBallSize.clamp(10.0, 96.0);
 
         return DragTarget<Map<String, dynamic>>(
-          onWillAccept: (data) {
-            // accept only if moving to a different tube and destination can accept the ball
-            if (data == null || tubeIndex == null) return false;
+          onWillAcceptWithDetails: (details) {
+            final data = details.data;
+            if (tubeIndex == null) return false;
             final int from = data['from'] as int;
             final String ball = data['ball'] as String;
             if (from == tubeIndex) return false;
-            return tube.canAccept(ball);
+
+            // If parent provided a predicate, use it to mirror game rules
+            if (canDropPredicate != null) {
+              return canDropPredicate!(ball, tube);
+            }
+
+            // Fallback: only accept if destination not full and (empty or same color)
+            if (tube.isFull) return false;
+            if (tube.isEmpty) return true;
+            return tube.topBall == ball;
           },
-          onAccept: (data) {
+          onAcceptWithDetails: (details) {
             if (onDrop != null && tubeIndex != null) {
+              final data = details.data;
               final int from = data['from'] as int;
               final String ball = data['ball'] as String;
               onDrop!(from, tubeIndex!, ball);
@@ -76,7 +86,7 @@ class TubeWidget extends StatelessWidget {
                       : (hintAccept ? Colors.lightGreen : (highlight ? Colors.orange : Colors.black54)),
                   width: tubeBorderWidth,
                 ),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(4),
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -95,7 +105,7 @@ class TubeWidget extends StatelessWidget {
                       ignoring: true,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(3),
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
@@ -126,27 +136,21 @@ class TubeWidget extends StatelessWidget {
                     ),
                     if (i < capacity - count - 1) SizedBox(height: itemSpacing),
                   ],
-                  // Render actual balls; displayBalls[0] is the visual top ball
+                  // Render actual balls; displayBalls[0] is the visual TOP ball
                   for (int i = 0; i < count; i++) ...[
-                    // If we are asked to suppress the visual top ball (to avoid duplication during ghost flight),
-                    // render a transparent spacer for the top slot instead of the ball/Draggable.
-                    if (i == 0 && suppressTopForColor != null && displayBalls[i] == suppressTopForColor)
-                      SizedBox(width: computedBallSize, height: computedBallSize)
-                    else if (i == 0 && tubeIndex != null)
+                    // Make ONLY the top ball draggable (i == 0)
+                    if (i == 0 && tubeIndex != null && suppressTopForColor != displayBalls[i])
                       Draggable<Map<String, dynamic>>(
-                        data: {
-                          'from': tubeIndex,
-                          'ball': displayBalls[i],
-                        },
-                        dragAnchorStrategy: childDragAnchorStrategy,
-                        feedback: Material(
-                          type: MaterialType.transparency,
-                          child: Image.asset(
-                            "assets/balls/${displayBalls[i]}.png",
-                            width: computedBallSize,
-                            height: computedBallSize,
-                            fit: BoxFit.contain,
+                        data: {'from': tubeIndex, 'ball': displayBalls[i]},
+                        feedback: Container(
+                          width: computedBallSize,
+                          height: computedBallSize,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(2, 4))],
                           ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Image.asset('assets/balls/${displayBalls[i]}.png', fit: BoxFit.cover),
                         ),
                         childWhenDragging: SizedBox(
                           width: computedBallSize,
@@ -167,8 +171,8 @@ class TubeWidget extends StatelessWidget {
             // Always use the full-height inner shell (fixed 12-slot tubes)
             Widget tubeBody = innerShell;
 
-            // Add a bottom spacer only in landscape to raise the tube bottom without moving the board
-            final double bottomLift = isLandscape ? 24.0 : 0.0;
+            // Remove bottom spacer to prevent overflow in tight layouts
+            final double bottomLift = 0.0;
 
             // Wrap with a GestureDetector so taps are handled here, avoiding parent conflicts with Draggable
             return GestureDetector(
