@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'screens/game_screen.dart';
 import 'services/preferences.dart';
+import 'services/audio_service.dart';
+import 'services/premium_service.dart';
+import 'services/ad_service.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Force landscape orientation
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
   runApp(const BallSortApp());
 }
 
@@ -23,6 +33,13 @@ class _BallSortAppState extends State<BallSortApp> {
   void initState() {
     super.initState();
     _loadTheme();
+    _initializeServices();
+  }
+
+  Future<void> _initializeServices() async {
+    await AudioService.initialize();
+    await PremiumService.initialize();
+    await AdService.initialize();
   }
 
   Future<void> _loadTheme() async {
@@ -47,8 +64,10 @@ class _BallSortAppState extends State<BallSortApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Ball Sort Puzzle',
-      theme: ThemeData(colorSchemeSeed: Colors.deepPurple, brightness: Brightness.light),
-      darkTheme: ThemeData(colorSchemeSeed: Colors.deepPurple, brightness: Brightness.dark),
+      theme: ThemeData(
+          colorSchemeSeed: Colors.deepPurple, brightness: Brightness.light),
+      darkTheme: ThemeData(
+          colorSchemeSeed: Colors.deepPurple, brightness: Brightness.dark),
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
       home: const GameScreen(),

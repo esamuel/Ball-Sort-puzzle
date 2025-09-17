@@ -10,6 +10,17 @@ dependencies:
     sdk: flutter
   shared_preferences: ^2.2.3
   audioplayers: ^5.2.1
+  # Monetization
+  in_app_purchase: ^3.1.11
+  google_mobile_ads: ^6.0.0
+  # Analytics
+  firebase_analytics: ^10.7.4
+  firebase_crashlytics: ^3.4.9
+  # Platform Services
+  # game_services: ^0.0.2
+  # Web Optimization
+  url_launcher: ^6.2.2
+  share_plus: ^7.2.2
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1
